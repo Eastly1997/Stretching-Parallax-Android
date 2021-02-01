@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.util.Log
 import android.view.MotionEvent
+import android.view.View
 import android.view.View.OnTouchListener
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
@@ -16,6 +17,7 @@ import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener
 import com.google.android.material.appbar.CollapsingToolbarLayout
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -26,12 +28,10 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility")
     var touchListener = OnTouchListener { _, event ->
         if (event.action == MotionEvent.ACTION_UP) {
-            handler.postDelayed(Runnable {
-                if(vOffset >= expandHeight)
+            handler.postDelayed({
+                if (vOffset >= expandHeight)
                     setStandardToolbar(vOffset)
             }, 100)
-        }
-        if (event.action == MotionEvent.ACTION_DOWN) {
         }
         false
     }
@@ -48,18 +48,21 @@ class MainActivity : AppCompatActivity() {
         appbar.addOnOffsetChangedListener(OnOffsetChangedListener { _, verticalOffset ->
             vOffset = verticalOffset
             adjustImage(vOffset)
-            Log.e("PARALLAX", "OFFSET: $vOffset")
             expandHeight = -appbar.totalScrollRange + 450
-            Log.e("PARALLAX", "expandHeight $expandHeight");
+
+            if (abs(verticalOffset) == appbar.totalScrollRange) {
+                // Collapsed
+                tvRestaurantNameToolbar.visibility = View.VISIBLE
+            } else {
+                // Expanded
+                tvRestaurantNameToolbar.visibility = View.GONE
+            }
         })
-        setStandardToolbar(vOffset)
 
-
-
+        handler.postDelayed(Runnable {setStandardToolbar(0)}, 100)
     }
 
     private fun setStandardToolbar(position: Int) {
-
         val params = appbar.layoutParams as CoordinatorLayout.LayoutParams
         val behavior = params.behavior as AppBarLayout.Behavior?
         if (behavior != null) {
