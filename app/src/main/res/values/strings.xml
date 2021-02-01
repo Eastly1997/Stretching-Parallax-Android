@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Stretching Parallax</string>
+    <string name="hello_world">Hello World</string>
+    <string name="wish_list">wish list</string>
+    <string name="search">Search</string>
+    <string name="back">Back</string>
 </resources>
