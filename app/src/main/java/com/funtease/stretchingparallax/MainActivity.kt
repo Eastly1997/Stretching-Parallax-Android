@@ -4,15 +4,19 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.graphics.Matrix
+import android.graphics.PorterDuff
 import android.os.Bundle
 import android.os.Handler
-import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.View.OnTouchListener
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
+import androidx.core.content.ContextCompat
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.AppBarLayout.OnOffsetChangedListener
 import com.google.android.material.appbar.CollapsingToolbarLayout
@@ -25,13 +29,24 @@ class MainActivity : AppCompatActivity() {
     private var vOffset : Int = 0
     private var handler =  Handler()
     private var expandHeight : Int = 0
+    private val valueAnimator: ValueAnimator = ValueAnimator.ofInt()
+    private var isTouching: Boolean = false
+    private var isFade: Boolean = false
+
+    private var fadeOut:AlphaAnimation = AlphaAnimation(1f, 0.0f)
+    private var fadeIn:AlphaAnimation = AlphaAnimation(0.0f, 1f)
+
+
     @SuppressLint("ClickableViewAccessibility")
     var touchListener = OnTouchListener { _, event ->
         if (event.action == MotionEvent.ACTION_UP) {
+            isTouching = false
             handler.postDelayed({
                 if (vOffset >= expandHeight)
                     setStandardToolbar(vOffset)
             }, 100)
+        } else if (event.action == MotionEvent.ACTION_DOWN) {
+            isTouching = true
         }
         false
     }
@@ -40,48 +55,128 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         setUpToolBar()
+
+        setUpAnimation()
+    }
+
+    private fun setUpAnimation() {
+        fadeOut.duration = 300
+        fadeIn.duration = 350
+        fadeOut.interpolator = AccelerateInterpolator()
+        fadeIn.interpolator = DecelerateInterpolator()
+
+        fadeOut.setAnimationListener(object : Animation.AnimationListener {
+            override fun onAnimationStart(animation: Animation) {
+                rest_details_back.setColorFilter(
+                    ContextCompat.getColor(baseContext, R.color.black),
+                    PorterDuff.Mode.SRC_IN
+                )
+                ivSearch.setColorFilter(
+                    ContextCompat.getColor(baseContext, R.color.black),
+                    PorterDuff.Mode.MULTIPLY
+                )
+                ivWishList.setColorFilter(
+                    ContextCompat.getColor(baseContext, R.color.black),
+                    PorterDuff.Mode.MULTIPLY
+                )
+            }
+
+            override fun onAnimationEnd(animation: Animation) {
+                ivWishList_background.visibility = View.INVISIBLE
+                rest_details_back_background.visibility = View.INVISIBLE
+                ivSearch_background.visibility = View.INVISIBLE
+            }
+
+            override fun onAnimationRepeat(animation: Animation) {}
+        })
+
+        fadeIn.setAnimationListener(object : Animation.AnimationListener {
+            override fun onAnimationStart(animation: Animation) {
+                ivWishList_background.visibility = View.VISIBLE
+                rest_details_back_background.visibility = View.VISIBLE
+                ivSearch_background.visibility = View.VISIBLE
+                rest_details_back.setColorFilter(
+                    ContextCompat.getColor(baseContext, R.color.white),
+                    PorterDuff.Mode.SRC_IN
+                )
+                ivSearch.setColorFilter(
+                    ContextCompat.getColor(baseContext, R.color.white),
+                    PorterDuff.Mode.SRC_IN
+                )
+                ivWishList.setColorFilter(
+                    ContextCompat.getColor(baseContext, R.color.white),
+                    PorterDuff.Mode.SRC_IN
+                )
+            }
+
+            override fun onAnimationEnd(animation: Animation) {}
+
+            override fun onAnimationRepeat(animation: Animation) {}
+        })
     }
 
     private fun setUpToolBar() {
-        cdlList.setOnTouchListener(touchListener)
+        cdlList.setOnTouchListener(touchListener)`
         content_view.setOnTouchListener(touchListener)
         appbar.addOnOffsetChangedListener(OnOffsetChangedListener { _, verticalOffset ->
             vOffset = verticalOffset
             adjustImage(vOffset)
-            expandHeight = -appbar.totalScrollRange + 450
 
             if (abs(verticalOffset) == appbar.totalScrollRange) {
                 // Collapsed
                 tvRestaurantNameToolbar.visibility = View.VISIBLE
+                if (!isFade) {
+                    isFade = true;
+                    ivSearch_background.startAnimation(fadeOut)
+                    ivWishList_background.startAnimation(fadeOut)
+                    rest_details_back_background.startAnimation(fadeOut)
+                }
             } else {
                 // Expanded
+                if (isFade) {
+                    isFade = false;
+                    ivSearch_background.startAnimation(fadeIn)
+                    ivWishList_background.startAnimation(fadeIn)
+                    rest_details_back_background.startAnimation(fadeIn)
+                }
                 tvRestaurantNameToolbar.visibility = View.GONE
             }
         })
 
-        handler.postDelayed(Runnable {setStandardToolbar(0)}, 100)
+        //delaying this because for some unknown reason behavior is null
+        handler.postDelayed({
+            // 450 = Minimum height of the image
+            expandHeight = -appbar.totalScrollRange + 450
+            setStandardToolbar(0)
+        }, 150)
     }
 
     private fun setStandardToolbar(position: Int) {
         val params = appbar.layoutParams as CoordinatorLayout.LayoutParams
         val behavior = params.behavior as AppBarLayout.Behavior?
         if (behavior != null) {
-            val valueAnimator = ValueAnimator.ofInt()
-            valueAnimator.interpolator = DecelerateInterpolator()
-            valueAnimator.addUpdateListener { animation ->
-                behavior.topAndBottomOffset = (animation.animatedValue as Int)
-                appbar.requestLayout()
-                adjustImage((animation.animatedValue as Int))
+            if(!valueAnimator.isRunning) {
+                valueAnimator.interpolator = DecelerateInterpolator()
+                valueAnimator.addUpdateListener { animation ->
+                    //prevent animating when user is actively scrolling
+                    if (isTouching)
+                        return@addUpdateListener
+
+                    behavior.topAndBottomOffset = (animation.animatedValue as Int)
+                    appbar.requestLayout()
+                }
+                valueAnimator.addListener(object : AnimatorListenerAdapter() {
+                })
+                valueAnimator.setIntValues(position, expandHeight)
+                valueAnimator.duration = 350
+                valueAnimator.start()
             }
-            valueAnimator.addListener(object : AnimatorListenerAdapter() {
-            })
-            valueAnimator.setIntValues(position, expandHeight)
-            valueAnimator.duration = 350
-            valueAnimator.start()
         }
     }
 
 
+
+    //credits this method to stack overflow I forgot the link
     private fun adjustImage(verticalOffset: Int) {
         val matrix = Matrix(ivBanner.imageMatrix)
 
